@@ -8,5 +8,7 @@
 		"*.vcproj",
 		"*.svn*",
 		"*.md",
+		".gitattributes",
+		".git/*"
 	]
 }
