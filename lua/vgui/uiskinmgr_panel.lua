@@ -18,6 +18,17 @@ local availProp = vgui.RegisterTable({
 
 		self.Button:SetEnabled(!bool)
 	end,
+	SetAvailable = function(self, bool)
+		if !bool then
+			self.Button:SetImage("icon16/tick.png")
+			self.Button:SetTooltip("Already in preset")
+		else
+			self.Button:SetImage("icon16/add.png")
+			self.Button:SetTooltip("Add to preset")
+		end
+
+		self:SetDisabled(!bool)
+	end,
 	OnRemoved = function(self) end,
 	OnDefault = function(self) end,
 	OnAdded = function(self) end,
@@ -81,11 +92,11 @@ local availProp = vgui.RegisterTable({
 			end
 			self.DefButton:SetTooltip("Revert to skin default")
 		else
-			self.Button:SetImage("icon16/add.png")
 			self.Button.DoClick = function(b)
 				self:OnAdded()
 			end
-			self.Button:SetTooltip("Add to preset")
+
+			self:SetAvailable(true)
 		end
 	end,
 	PerformLayout = function(self, w, h)
@@ -189,16 +200,19 @@ function PANEL:Init()
 		surface.DrawRect(0, 0, w, h)
 	end
 
-	self.AvailProps = self:Add("DScrollPanel")
-	self.AvailPropsList = self.AvailProps:Add("DListLayout")
-	self.AvailPropsList:Dock(FILL)
+	self.AvailProps = self:Add("DPropertySheet")
 
-	self.AvailProps.Paint = function(fish, w, h)
-		local skyn = fish:GetSkin()
+	self.AllProperties = {}
 
-		surface.SetDrawColor(skyn.Colours.Properties.Border)
-		surface.DrawRect(0, 0, w, h)
-	end
+	local scrollpanel1 = self.AvailProps:Add("DScrollPanel")
+	self.PropsListGeneral = scrollpanel1:Add("DListLayout")
+	self.PropsListGeneral:Dock(FILL)
+	self.AvailProps:AddSheet("General", scrollpanel1, "icon16/application_edit.png")
+
+	scrollpanel1 = self.AvailProps:Add("DScrollPanel")
+	self.PropsListExperimental = scrollpanel1:Add("DListLayout")
+	self.PropsListExperimental:Dock(FILL)
+	self.AvailProps:AddSheet("Experimental", scrollpanel1, "icon16/error.png")
 
 	self.PresetName = self:Add("DTextEntry")
 
@@ -247,6 +261,7 @@ function PANEL:Init()
 			self:UpdateList()
 			self:UpdatePresets()
 			self:UpdateAvailable()
+			self:UpdateProperties()
 		end
 	end
 end
@@ -300,27 +315,31 @@ function PANEL:UpdateAvailable()
 	if !self.SkinManagerTable.currentSkin then return end
 	if !self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin] then return end
 
-	self.AvailPropsList:Clear()
+	self.PropsListGeneral:Clear()
 
 	for k, v in SortedPairs(self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin]) do
+		local avail
 		if v.r && v.g && v.b then
-			local avail = self.AvailPropsList:Add(availProp)
+			avail = self.PropsListGeneral:Add(availProp)
 			avail:Setup({r = v.r, g = v.g, b = v.b, a = v.a}, k)
-			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or {r = v.r, g = v.g, b = v.b, a = v.a}
 				self:UpdateProperties()
 				self:OnEdited(true)
 			end
 		elseif isstring(v) then
-			local avail = self.AvailPropsList:Add(availProp)
+			avail = self.PropsListGeneral:Add(availProp)
 			avail:Setup(v, k)
-			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or v
 				self:UpdateProperties()
 				self:OnEdited(true)
 			end
+		end
+
+		if IsValid(avail) then
+			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
+			self.AllProperties[self.SkinManagerTable.currentSkin .. k] = avail
 		end
 	end
 end
@@ -328,6 +347,12 @@ end
 function PANEL:UpdateProperties()
 	self.PropertiesList:Clear()
 	for k, v in SortedPairs(self.PresetData) do
+		local avail = self.AllProperties[self.SkinManagerTable.currentSkin .. k]
+
+		if IsValid(avail) then
+			avail:SetAvailable(false)
+		end
+		
 		local prop = self.PropertiesList:Add(availProp)
 		prop:SetDivision(0.4)
 		prop:Setup(v, k, true)
@@ -336,6 +361,10 @@ function PANEL:UpdateProperties()
 			self.PresetData[k] = nil
 			self:UpdateProperties()
 			self:OnEdited(true)
+			
+			if IsValid(avail) then
+				avail:SetAvailable(true)
+			end
 		end
 		prop.OnDefault = function(x)
 			self.PresetData[k] = (self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin] or {})[k]
@@ -410,7 +439,7 @@ function PANEL:PerformLayout(w, h)
 	self.AvailProps:SetPos(self.Properties:GetX(), self.PresetList:GetY())
 	self.AvailProps:SetWide(self.Properties:GetWide())
 	self.AvailProps:SetTall(self.PresetList:GetTall())
-	self.AvailPropsList:InvalidateLayout()
+	self.PropsListGeneral:InvalidateLayout()
 	self.AvailProps:InvalidateLayout()
 
 	self.SaveButton:SetPos(self.AvailProps:GetX(), self.AvailProps:GetY() + self.AvailProps:GetTall() + 4)

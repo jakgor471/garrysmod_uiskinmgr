@@ -165,10 +165,7 @@ list.Set( "DesktopWindows", "UISkinManager", {
 		window:SetMinHeight( 440 )
 		window:Center()
 
-		local switcher = vgui.Create("DPropertySheet", window)
-		switcher:Dock(FILL)
-
-		local mgr = vgui.Create("uiskinmgr_panel", switcher)
+		local mgr = vgui.Create("uiskinmgr_panel", window)
 		mgr:Dock(FILL)
 		mgr:DockMargin(4,4,4,4)
 		mgr:SetSkinManager(SkinManager)
@@ -177,8 +174,6 @@ list.Set( "DesktopWindows", "UISkinManager", {
 		mgr.OnPresetSave = handlePresetSave
 		mgr.OnPresetDelete = handlePresetDelete
 		mgr.OnRefreshPresets = handleRefreshPresets
-
-		switcher:AddSheet( "General", mgr, "icon16/application_edit.png" )
 	end
 } )
 
