@@ -1,7 +1,23 @@
 include("includes/uiskinmgr_include.lua")
+include("includes/uiskinmgr_rendering.lua")
 
 local MASTER = vgui.GetWorldPanel()
 local SkinManager = {}
+
+local XPerimental = {}
+XPerimental["Tint.Color"] = {
+	default = Color(255,0,0,20),
+	apply = function(skin, preset, value)
+		local skintex = skin.GwenTexture
+
+		if skintex then
+			local tex = skintex:GetTexture("$basetexture")
+			local newtex = uiskinmgr.Render_Tint(tex, Color(value.r, value.g, value.b, value.a), 1)
+
+			skintex:SetTexture("$basetexture", newtex)
+		end
+	end
+}
 
 local function serializePreset(preset, name)
 	local str = ""
@@ -46,6 +62,49 @@ local function deepskin(children, skin)
 	end
 end
 
+local function reloadDefaults(skinmanager)
+	for x, y in pairs(derma.SkinList) do
+		local stack = util.Stack()
+		skinmanager.defaults[x] = {}
+
+		local skintex = y.GwenTexture
+		if skintex then
+			local tex = skintex:GetTexture("$basetexture")
+			skinmanager.defaults[x].GwenTex = tex
+		end
+
+		stack:Push({table1 = y, parent = ""})
+
+		while stack:Size() > 0 do
+			local tbl = stack:Top().table1
+			local parent = stack:Top().parent
+			stack:Pop()
+
+			for k, v in pairs(tbl) do
+				local ourparent = parent .. k
+				if istable(v) then
+					if v.r && v.g && v.b then
+						skinmanager.defaults[x][ourparent] = {r = v.r, g = v.g, b = v.b, a = v.a or 255}
+					else
+						stack:Push({table1 = v, parent = ourparent .. "."})
+					end
+				elseif isstring(v) then
+					skinmanager.defaults[x][ourparent] = v
+				end
+			end
+		end
+
+		for k, v in pairs(XPerimental) do
+			local def = v.default
+			if IsColor(def) then
+				skinmanager.defaults[x]["_Exp."..k] = {r = def.r, g = def.g, b = def.b, a = def.a}
+			else
+				skinmanager.defaults[x]["_Exp."..k] = def
+			end
+		end
+	end
+end
+
 local function applyPreset(preset, skin, default)
 	if !preset || !skin then return end
 
@@ -60,6 +119,7 @@ local function applyPreset(preset, skin, default)
 		for k, v in pairs(tbl) do
 			local ourlovingparent = parent .. k
 			if !uiskinmgr.IsAllowedField(ourlovingparent) then continue end
+
 			if istable(v) then
 				if v.r && v.g && v.b then
 					local val = preset[ourlovingparent] or default[ourlovingparent]
@@ -70,6 +130,22 @@ local function applyPreset(preset, skin, default)
 			elseif isstring(v) then
 				local val = preset[ourlovingparent] or default[ourlovingparent]
 				tbl[k] = val
+			end
+		end
+	end
+
+	//refresh the texture from disk
+	local skintex = skin.GwenTexture
+	if skintex && default.GwenTex then
+		skintex:SetTexture("$basetexture", default.GwenTex)
+	end
+
+	for k, v in pairs(preset) do
+		local isexperimental, expname = uiskinmgr.IsExperimental(k)
+		if isexperimental then
+			local xpfield = XPerimental[expname] or {}
+			if xpfield.apply then
+				xpfield.apply(skin, preset, v)
 			end
 		end
 	end
@@ -187,30 +263,7 @@ loadPresetsFromDisk(SkinManager)
 
 hook.Add("PostGamemodeLoaded", "UISkinMgr_Load", function()
 	//build defaults
-	for x, y in pairs(derma.SkinList) do
-		local stack = util.Stack()
-		SkinManager.defaults[x] = {}
-		stack:Push({table1 = y, parent = ""})
-
-		while stack:Size() > 0 do
-			local tbl = stack:Top().table1
-			local parent = stack:Top().parent
-			stack:Pop()
-
-			for k, v in pairs(tbl) do
-				local ourparent = parent .. k
-				if istable(v) then
-					if v.r && v.g && v.b then
-						SkinManager.defaults[x][ourparent] = {r = v.r, g = v.g, b = v.b, a = v.a or 255}
-					else
-						stack:Push({table1 = v, parent = ourparent .. "."})
-					end
-				elseif isstring(v) then
-					SkinManager.defaults[x][ourparent] = v
-				end
-			end
-		end
-	end
+	reloadDefaults(SkinManager)
 
 	if !derma.SkinList[SkinManager.currentSkin] then
 		SkinManager.currentSkin = "Default"
@@ -229,4 +282,11 @@ hook.Add("PostGamemodeLoaded", "UISkinMgr_Load", function()
 	applyPreset(SkinManager.presets[SkinManager.currentPreset], derma.SkinList[curskin], SkinManager.defaults[curskin])
 	deepskin(MASTER:GetChildren(), curskin)
 	derma.RefreshSkins()
+end)
+
+concommand.Add("uiskinmgr_reloaddefaults", function(ply, cmd, args, strargs)
+	if !SkinManager then return end
+
+	notification.AddLegacy("Defaults reloaded manually. It may cause some problems!", NOTIFY_GENERIC, 5)
+	reloadDefaults(SkinManager)
 end)

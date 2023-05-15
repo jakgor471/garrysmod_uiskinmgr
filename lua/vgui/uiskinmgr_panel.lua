@@ -316,11 +316,13 @@ function PANEL:UpdateAvailable()
 	if !self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin] then return end
 
 	self.PropsListGeneral:Clear()
+	self.PropsListExperimental:Clear()
 
 	for k, v in SortedPairs(self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin]) do
 		local avail
+
 		if v.r && v.g && v.b then
-			avail = self.PropsListGeneral:Add(availProp)
+			avail = vgui.CreateFromTable(availProp)
 			avail:Setup({r = v.r, g = v.g, b = v.b, a = v.a}, k)
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or {r = v.r, g = v.g, b = v.b, a = v.a}
@@ -328,7 +330,7 @@ function PANEL:UpdateAvailable()
 				self:OnEdited(true)
 			end
 		elseif isstring(v) then
-			avail = self.PropsListGeneral:Add(availProp)
+			avail = vgui.CreateFromTable(availProp)
 			avail:Setup(v, k)
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or v
@@ -340,6 +342,12 @@ function PANEL:UpdateAvailable()
 		if IsValid(avail) then
 			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
 			self.AllProperties[self.SkinManagerTable.currentSkin .. k] = avail
+
+			if uiskinmgr.IsExperimental(k) then
+				self.PropsListExperimental:Add(avail)
+			else
+				self.PropsListGeneral:Add(avail)
+			end
 		end
 	end
 end
