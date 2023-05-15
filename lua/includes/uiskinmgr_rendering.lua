@@ -25,8 +25,10 @@ function uiskinmgr.Render_Tint(texture, color, intensity)
 	//render.DrawScreenQuadEx(0,0, ScrW(), ScrH()) seems no to be working, the texture gets squished
 	render.DrawScreenQuad()
 
+	render.OverrideBlend(true, BLEND_SRC_COLOR, BLEND_DST_COLOR, BLENDFUNC_ADD, BLEND_DST_ALPHA, BLEND_SRC_ALPHA, BLENDFUNC_MIN)
 	surface.SetDrawColor( color )
 	surface.DrawRect(0, 0, ScrW(), ScrH())
+	render.OverrideBlend(false)
 
 	cam.End2D()
 	render.PopRenderTarget()

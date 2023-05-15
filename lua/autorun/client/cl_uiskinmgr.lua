@@ -6,7 +6,7 @@ local SkinManager = {}
 
 local XPerimental = {}
 XPerimental["Tint.Color"] = {
-	default = Color(255,0,0,20),
+	default = Color(0,0,0,255),
 	apply = function(skin, preset, value)
 		local skintex = skin.GwenTexture
 
