@@ -166,12 +166,13 @@ function PANEL:UpdateAvailable()
 	self.PropsListExperimental:Clear()
 
 	for k, v in SortedPairs(self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin]) do
-		local add = v.r && v.g && v.b || isstring(v)
+		local experimental = uiskinmgr.IsExperimental(k)
+		local add = experimental || istable(v) && v.r && v.g && v.b || isstring(v)
 
 		if add then
 			local avail = vgui.Create("uiskinmgr_control")
 
-			avail:Setup(v, k)
+			avail:Setup(v, k, false, self.SkinManagerTable.extra[k])
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or v
 				self:UpdateProperties()
@@ -183,7 +184,7 @@ function PANEL:UpdateAvailable()
 
 			self.AllProperties[self.SkinManagerTable.currentSkin .. k] = avail
 
-			if uiskinmgr.IsExperimental(k) then
+			if experimental then
 				self.PropsListExperimental:Add(avail)
 			else
 				self.PropsListGeneral:Add(avail)
@@ -203,7 +204,7 @@ function PANEL:UpdateProperties()
 		
 		local prop = self.PropertiesList:Add("uiskinmgr_control")
 		prop:SetDivision(0.4)
-		prop:Setup(v, k, true)
+		prop:Setup(v, k, true, self.SkinManagerTable.extra[k])
 		prop:SetDisabled(!uiskinmgr.IsAllowedField(k))
 		prop.OnRemoved = function(x)
 			self.PresetData[k] = nil

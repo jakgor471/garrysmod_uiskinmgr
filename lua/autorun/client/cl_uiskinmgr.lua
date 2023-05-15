@@ -12,11 +12,22 @@ XPerimental["Tint.Color"] = {
 
 		if skintex then
 			local tex = skintex:GetTexture("$basetexture")
-			local newtex = uiskinmgr.Render_Tint(tex, Color(value.r, value.g, value.b, value.a), 1)
+			local newtex = uiskinmgr.Render_Tint(tex, Color(value.r, value.g, value.b, value.a), (preset["_Exp.Tint.Opacity"] || 1), 
+				(preset["_Exp.Tint.Mode"] || "Add"))
 
 			skintex:SetTexture("$basetexture", newtex)
 		end
 	end
+}
+XPerimental["Tint.Mode"] = {
+	default = "Add",
+	extra = {choices = {
+		["Add"] = "Add",
+		["Multiply"] = "Mul"
+	}, text = "Blend mode"}
+}
+XPerimental["Tint.Opacity"] = {
+	default = 1
 }
 
 local function serializePreset(preset, name)
@@ -96,11 +107,8 @@ local function reloadDefaults(skinmanager)
 
 		for k, v in pairs(XPerimental) do
 			local def = v.default
-			if IsColor(def) then
-				skinmanager.defaults[x]["_Exp."..k] = {r = def.r, g = def.g, b = def.b, a = def.a}
-			else
-				skinmanager.defaults[x]["_Exp."..k] = def
-			end
+			skinmanager.defaults[x]["_Exp."..k] = def
+			skinmanager.extra["_Exp."..k] = v.extra
 		end
 	end
 end
@@ -255,7 +263,8 @@ list.Set( "DesktopWindows", "UISkinManager", {
 
 SkinManager.currentSkin = cookie.GetString("UISkinMgr_DefaultSkin", "Default")
 
-SkinManager.defaults = SkinManager.defaults or {}
+SkinManager.defaults = {}
+SkinManager.extra = {}
 SkinManager.presets = {["No override"] = {}}
 SkinManager.currentPreset = cookie.GetString("UISkinMgr_DefaultPreset", "No override")
 

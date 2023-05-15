@@ -14,26 +14,33 @@ function PANEL:Init()
 end
 
 function PANEL:Setup(value, name, editable, type)
+	self:SetTooltip(name)
 	self.Buttons = {}
 	self.Editable = editable
 
 	self.VarName = name
 	self.Label:SetText(name)
 
+	local additional
 	if !type then
 		if istable(value) && value.r && value.g && value.b then
 			type = "Color"
-		elseif istable(value) && value.choices then
-			type = "Combo"
 		elseif isstring(value) then type = "Generic"
 		elseif isnumber(value) then type = "Number"
 		end
+	elseif istable(type) && type.choices then
+		additional = type
+		type = "Combo"
 	end
 
 	if !vgui.GetControlTable("uiskinmgr_control_"..type) then type = "Generic" end
 
 	self.Inner = vgui.Create("uiskinmgr_control_"..type, self)
-	self.Inner:Setup(value, editable, self)
+	self.Inner:Setup(value or (additional && additional.text), editable, self)
+
+	if self.Inner.SetOptions then
+		self.Inner:SetOptions(additional.choices)
+	end
 
 	if editable then
 		local butRemove = self:Add("DImageButton")
@@ -131,13 +138,13 @@ function PANEL:PerformLayout(w, h)
 
 	local restSpace = divw2
 	for _, but in ipairs(self.Buttons) do
-		divw2 = divw2 - but:GetWide() - 4
-		but:SetPos(divw + divw2, 4)
+		restSpace = restSpace - but:GetWide() - 4
+		but:SetPos(divw + restSpace, 4)
 	end
 
 	if self.Inner then
 		self.Inner:SetPos(divw + 4, 2)
-		self.Inner:SetSize(divw + restSpace - 4, h - 4)
+		self.Inner:SetSize(restSpace - 8, h - 4)
 	end
 end
 
@@ -168,6 +175,14 @@ function PANEL:Setup(value, editable, parent)
 		self.Parent:OnEdited(s:GetValue())
 	end
 	self.TextEntry:SetPaintBackground(false)
+
+	local skin = self:GetSkin()
+
+	self.TextEntry.Paint = function(s, w, h)
+		surface.SetDrawColor(skin.colTextEntryBG)
+		surface.DrawRect(0,0,w,h)
+		s:DrawTextEntryText(skin.colTextEntryText, skin.colTextEntryTextHighlight, skin.colTextEntryTextCursor)
+	end
 end
 
 function PANEL:SetValue(value)
@@ -254,8 +269,36 @@ end
 function PANEL:PerformLayout(w, h)
 	self.ColorCube:SetPos(0,0)
 	self.ColorCube:SetSize(h, h)
-	self.TextEntry:SetPos(h + 4, 0)
-	self.TextEntry:SetSize(w - h - 8, h)
+	self.TextEntry:SetPos(h+4, 0)
+	self.TextEntry:SetSize(w - h - 4, h)
 end
 
 derma.DefineControl("uiskinmgr_control_Color", "", PANEL, "uiskinmgr_control_Generic")
+
+/*--- Combo ---*/
+PANEL = {}
+
+function PANEL:Setup(value, editable, parent)
+	self.Editable = editable
+	self.Parent = parent
+
+	self.TextEntry = self:Add("DComboBox") //hack to get the layout automaticaly working :)
+	self.TextEntry:SetEnabled(editable)
+	self.TextEntry.OnSelect = function(cb, index, value, data)
+		self.Parent:OnEdited(data)
+	end
+
+	self.Value = value
+end
+
+function PANEL:SetOptions(choices)
+	for k, v in SortedPairs(choices) do
+		self.TextEntry:AddChoice(k, v)
+
+		if v == self.Value then
+			self.TextEntry:SetText(k)
+		end
+	end
+end
+
+derma.DefineControl("uiskinmgr_control_Combo", "", PANEL, "uiskinmgr_control_Generic")
