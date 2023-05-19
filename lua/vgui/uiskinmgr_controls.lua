@@ -302,3 +302,27 @@ function PANEL:SetOptions(choices)
 end
 
 derma.DefineControl("uiskinmgr_control_Combo", "", PANEL, "uiskinmgr_control_Generic")
+
+/*--- Numbre ---*/
+PANEL = {}
+
+function PANEL:Setup(value, editable, parent)
+	self.Editable = editable
+	self.Parent = parent
+
+	self.TextEntry = self:Add("DNumSlider") //hack to get the layout automaticaly working :)
+	self.TextEntry:SetText("")
+	self.TextEntry:SetEnabled(editable)
+	self.TextEntry:SetMin(0)
+	self.TextEntry:SetMax(1)
+	self.TextEntry:SetDark(true)
+	self.TextEntry:SetDecimals(4)
+	self.TextEntry:SetValue(value)
+	self.TextEntry.OnValueChanged = function(ns, val)
+		self.Parent:OnEdited(val)
+	end
+
+	self.Value = value
+end
+
+derma.DefineControl("uiskinmgr_control_Number", "", PANEL, "uiskinmgr_control_Generic")

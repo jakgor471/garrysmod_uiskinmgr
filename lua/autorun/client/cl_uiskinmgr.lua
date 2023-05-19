@@ -7,17 +7,16 @@ local SkinManager = {}
 local XPerimental = {}
 XPerimental["Tint.Color"] = {
 	default = Color(0,0,0,255),
-	apply = function(skin, preset, value)
-		local skintex = skin.GwenTexture
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "Colorize",
+			mode = preset["_Exp.Tint.Mode"] or "Add",
+			color = value
+		}
 
-		if skintex then
-			local tex = skintex:GetTexture("$basetexture")
-			local newtex = uiskinmgr.Render_Tint(tex, Color(value.r, value.g, value.b, value.a), (preset["_Exp.Tint.Opacity"] || 1), 
-				(preset["_Exp.Tint.Mode"] || "Add"))
-
-			skintex:SetTexture("$basetexture", newtex)
-		end
-	end
+		table.insert(pipeline, entry)
+	end,
+	order = 100
 }
 XPerimental["Tint.Mode"] = {
 	default = "Add",
@@ -26,18 +25,55 @@ XPerimental["Tint.Mode"] = {
 		["Multiply"] = "Mul"
 	}, text = "Blend mode"}
 }
-XPerimental["Tint.Opacity"] = {
-	default = 1
+XPerimental["Render.BlurX"] = {
+	default = 0,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "BlurX",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 150
 }
+XPerimental["Render.BlurY"] = {
+	default = 0,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "BlurY",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 160
+}
+
+XPerimental["Render.Opacity"] = {
+	default = 1,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "Opacity",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 200
+}
+
 
 local function serializePreset(preset, name)
 	local str = ""
 
 	for k, v in SortedPairs(preset) do
-		if v.r && v.g && v.b then
+		if istable(v) && v.r && v.g && v.b then
 			str = str .. k .. " = " .. tostring(v.r) .. " " .. tostring(v.g) .. " " .. tostring(v.b) .. " " .. tostring(v.a or 255) .. "\r\n"
 		elseif isstring(v) then
 			str = str .. k .. " = \"" .. v .. "\"\r\n"
+		elseif isnumber(v) then
+			str = str .. k .. " = " .. v .. "\r\n"
 		end
 	end
 
@@ -59,7 +95,11 @@ local function deserializePreset(str)
 		else
 			local r, g, b, a = string.match(value, "([%d]+)%s+([%d]+)%s+([%d]+)%s+([%d]+)%s+")
 
-			preset[path] = Color(r,g,b,a)
+			if r && g && b then
+				preset[path] = Color(tonumber(r),tonumber(g),tonumber(b),tonumber(a) or 255)
+			elseif r then
+				preset[path] = tonumber(r)
+			end
 		end
 	end
 
@@ -148,14 +188,17 @@ local function applyPreset(preset, skin, default)
 		skintex:SetTexture("$basetexture", default.GwenTex)
 	end
 
-	for k, v in pairs(preset) do
-		local isexperimental, expname = uiskinmgr.IsExperimental(k)
-		if isexperimental then
-			local xpfield = XPerimental[expname] or {}
-			if xpfield.apply then
-				xpfield.apply(skin, preset, v)
-			end
+	local pipeline = {}
+	for k, v in SortedPairsByMemberValue(XPerimental, order) do
+		if preset["_Exp."..k] && v.apply then
+			v.apply(skin, preset, preset["_Exp."..k], pipeline)
 		end
+	end
+
+	if skintex then
+		local tex = skintex:GetTexture("$basetexture")
+		local newtex = uiskinmgr.Render_Pipeline(skintex, pipeline)
+		skintex:SetTexture("$basetexture", newtex)
 	end
 end
 
