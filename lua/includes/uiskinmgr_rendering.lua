@@ -1,8 +1,11 @@
 uiskinmgr = uiskinmgr or {}
+local flags = bit.bor(1, 256)
 
-//RT_SIZE_OFFSCREEN is very important!!!!!!!!!!!!!
-local rt = GetRenderTargetEx("uiskinmgr_rendertarget", 2048, 2048, RT_SIZE_OFFSCREEN, MATERIAL_RT_DEPTH_SEPARATE, bit.bor(1, 256), 0, IMAGE_FORMAT_BGRA8888)
-local rt2 = GetRenderTargetEx("uiskinmgr_rendertarget_helper", 2048, 2048, RT_SIZE_OFFSCREEN, MATERIAL_RT_DEPTH_SEPARATE, bit.bor(1, 256), 0, IMAGE_FORMAT_BGRA8888)
+local RTs = {}
+RTs["2048"] = GetRenderTargetEx("uiskinmgr_rendertarget2048", 2048, 2048, RT_SIZE_LITERAL, MATERIAL_RT_DEPTH_SEPARATE, flags, 0, IMAGE_FORMAT_BGRA8888)
+RTs["1024"] = GetRenderTargetEx("uiskinmgr_rendertarget1024", 1024, 1024, RT_SIZE_LITERAL, MATERIAL_RT_DEPTH_SEPARATE, flags, 0, IMAGE_FORMAT_BGRA8888)
+RTs["512"] = GetRenderTargetEx("uiskinmgr_rendertarget512", 512, 512, RT_SIZE_LITERAL, MATERIAL_RT_DEPTH_SEPARATE, flags, 0, IMAGE_FORMAT_BGRA8888)
+local rt2 = GetRenderTargetEx("uiskinmgr_rendertarget_helper", 2048, 2048, RT_SIZE_LITERAL, MATERIAL_RT_DEPTH_SEPARATE, flags, 0, IMAGE_FORMAT_BGRA8888)
 
 local matblurx = Material("pp/blurx")
 local matblury = Material("pp/blury")
@@ -75,6 +78,10 @@ function uiskinmgr.Render_Pipeline(mat, pipeline)
 	local texture = mat:GetTexture("$basetexture")
 	if !pipeline || #pipeline < 1 then return texture end
 
+	local po2 = math.floor(math.max(math.log(texture:Width(), 2), math.log(texture:Height(), 2)))
+	local bestsize = math.Clamp(math.pow(2, po2), 512, 2048)
+	local rt = RTs[tostring(bestsize)]
+
 	//VERY IMPORTANT to set the width and height to skin texture's w and h
 	render.PushRenderTarget(rt, 0, 0, texture:Width(), texture:Height())
 	cam.Start2D()
@@ -95,6 +102,16 @@ function uiskinmgr.Render_Pipeline(mat, pipeline)
 			operations[v.operation](rt, v, mat)
 		end
 	end
+
+	local data = render.Capture( {
+		format = "png",
+		x = 0,
+		y = 0,
+		w = 2048,
+		h = 2048
+	} )
+
+	file.Write( "uiskinmgr/image.png", data )
 
 	DisableClipping(false)
 	cam.End2D()
