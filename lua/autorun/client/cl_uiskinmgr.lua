@@ -1,16 +1,79 @@
 include("includes/uiskinmgr_include.lua")
+include("includes/uiskinmgr_rendering.lua")
 
 local MASTER = vgui.GetWorldPanel()
 local SkinManager = {}
+
+local XPerimental = {}
+XPerimental["Tint.Color"] = {
+	default = Color(0,0,0,255),
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "Colorize",
+			mode = preset["_Exp.Tint.Mode"] or "Add",
+			color = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 100
+}
+XPerimental["Tint.Mode"] = {
+	default = "Add",
+	extra = {choices = {
+		["Add"] = "Add",
+		["Multiply"] = "Mul"
+	}, text = "Blend mode"}
+}
+XPerimental["Render.BlurX"] = {
+	default = 0,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "BlurX",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 150
+}
+XPerimental["Render.BlurY"] = {
+	default = 0,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "BlurY",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 160
+}
+
+XPerimental["Render.Opacity"] = {
+	default = 1,
+	apply = function(skin, preset, value, pipeline)
+		local entry = {
+			operation = "Opacity",
+			value = value
+		}
+
+		table.insert(pipeline, entry)
+	end,
+	order = 200
+}
+
 
 local function serializePreset(preset, name)
 	local str = ""
 
 	for k, v in SortedPairs(preset) do
-		if v.r && v.g && v.b then
+		if istable(v) && v.r && v.g && v.b then
 			str = str .. k .. " = " .. tostring(v.r) .. " " .. tostring(v.g) .. " " .. tostring(v.b) .. " " .. tostring(v.a or 255) .. "\r\n"
 		elseif isstring(v) then
 			str = str .. k .. " = \"" .. v .. "\"\r\n"
+		elseif isnumber(v) then
+			str = str .. k .. " = " .. v .. "\r\n"
 		end
 	end
 
@@ -32,7 +95,11 @@ local function deserializePreset(str)
 		else
 			local r, g, b, a = string.match(value, "([%d]+)%s+([%d]+)%s+([%d]+)%s+([%d]+)%s+")
 
-			preset[path] = Color(r,g,b,a)
+			if r && g && b then
+				preset[path] = Color(tonumber(r),tonumber(g),tonumber(b),tonumber(a) or 255)
+			elseif r then
+				preset[path] = tonumber(r)
+			end
 		end
 	end
 
@@ -43,6 +110,46 @@ local function deepskin(children, skin)
 	for k,v in pairs(children) do
 		v:SetSkin(skin)
 		if #v:GetChildren() != 0 then deepskin(v:GetChildren(),skin) end
+	end
+end
+
+local function reloadDefaults(skinmanager)
+	for x, y in pairs(derma.SkinList) do
+		local stack = util.Stack()
+		skinmanager.defaults[x] = {}
+
+		local skintex = y.GwenTexture
+		if skintex then
+			local tex = skintex:GetTexture("$basetexture")
+			skinmanager.defaults[x].GwenTex = tex
+		end
+
+		stack:Push({table1 = y, parent = ""})
+
+		while stack:Size() > 0 do
+			local tbl = stack:Top().table1
+			local parent = stack:Top().parent
+			stack:Pop()
+
+			for k, v in pairs(tbl) do
+				local ourparent = parent .. k
+				if istable(v) then
+					if v.r && v.g && v.b then
+						skinmanager.defaults[x][ourparent] = {r = v.r, g = v.g, b = v.b, a = v.a or 255}
+					else
+						stack:Push({table1 = v, parent = ourparent .. "."})
+					end
+				elseif isstring(v) then
+					skinmanager.defaults[x][ourparent] = v
+				end
+			end
+		end
+
+		for k, v in pairs(XPerimental) do
+			local def = v.default
+			skinmanager.defaults[x]["_Exp."..k] = def
+			skinmanager.extra["_Exp."..k] = v.extra
+		end
 	end
 end
 
@@ -60,6 +167,7 @@ local function applyPreset(preset, skin, default)
 		for k, v in pairs(tbl) do
 			local ourlovingparent = parent .. k
 			if !uiskinmgr.IsAllowedField(ourlovingparent) then continue end
+
 			if istable(v) then
 				if v.r && v.g && v.b then
 					local val = preset[ourlovingparent] or default[ourlovingparent]
@@ -72,6 +180,25 @@ local function applyPreset(preset, skin, default)
 				tbl[k] = val
 			end
 		end
+	end
+
+	//refresh the texture from disk
+	local skintex = skin.GwenTexture
+	if skintex && default.GwenTex then
+		skintex:SetTexture("$basetexture", default.GwenTex)
+	end
+
+	local pipeline = {}
+	for k, v in SortedPairsByMemberValue(XPerimental, order) do
+		if preset["_Exp."..k] && v.apply then
+			v.apply(skin, preset, preset["_Exp."..k], pipeline)
+		end
+	end
+
+	if skintex then
+		local tex = skintex:GetTexture("$basetexture")
+		local newtex = uiskinmgr.Render_Pipeline(skintex, pipeline)
+		skintex:SetTexture("$basetexture", newtex)
 	end
 end
 
@@ -165,10 +292,7 @@ list.Set( "DesktopWindows", "UISkinManager", {
 		window:SetMinHeight( 440 )
 		window:Center()
 
-		local switcher = vgui.Create("DPropertySheet", window)
-		switcher:Dock(FILL)
-
-		local mgr = vgui.Create("uiskinmgr_panel", switcher)
+		local mgr = vgui.Create("uiskinmgr_panel", window)
 		mgr:Dock(FILL)
 		mgr:DockMargin(4,4,4,4)
 		mgr:SetSkinManager(SkinManager)
@@ -177,14 +301,13 @@ list.Set( "DesktopWindows", "UISkinManager", {
 		mgr.OnPresetSave = handlePresetSave
 		mgr.OnPresetDelete = handlePresetDelete
 		mgr.OnRefreshPresets = handleRefreshPresets
-
-		switcher:AddSheet( "General", mgr, "icon16/application_edit.png" )
 	end
 } )
 
 SkinManager.currentSkin = cookie.GetString("UISkinMgr_DefaultSkin", "Default")
 
-SkinManager.defaults = SkinManager.defaults or {}
+SkinManager.defaults = {}
+SkinManager.extra = {}
 SkinManager.presets = {["No override"] = {}}
 SkinManager.currentPreset = cookie.GetString("UISkinMgr_DefaultPreset", "No override")
 
@@ -192,30 +315,7 @@ loadPresetsFromDisk(SkinManager)
 
 hook.Add("PostGamemodeLoaded", "UISkinMgr_Load", function()
 	//build defaults
-	for x, y in pairs(derma.SkinList) do
-		local stack = util.Stack()
-		SkinManager.defaults[x] = {}
-		stack:Push({table1 = y, parent = ""})
-
-		while stack:Size() > 0 do
-			local tbl = stack:Top().table1
-			local parent = stack:Top().parent
-			stack:Pop()
-
-			for k, v in pairs(tbl) do
-				local ourparent = parent .. k
-				if istable(v) then
-					if v.r && v.g && v.b then
-						SkinManager.defaults[x][ourparent] = {r = v.r, g = v.g, b = v.b, a = v.a or 255}
-					else
-						stack:Push({table1 = v, parent = ourparent .. "."})
-					end
-				elseif isstring(v) then
-					SkinManager.defaults[x][ourparent] = v
-				end
-			end
-		end
-	end
+	reloadDefaults(SkinManager)
 
 	if !derma.SkinList[SkinManager.currentSkin] then
 		SkinManager.currentSkin = "Default"
@@ -234,4 +334,11 @@ hook.Add("PostGamemodeLoaded", "UISkinMgr_Load", function()
 	applyPreset(SkinManager.presets[SkinManager.currentPreset], derma.SkinList[curskin], SkinManager.defaults[curskin])
 	deepskin(MASTER:GetChildren(), curskin)
 	derma.RefreshSkins()
+end)
+
+concommand.Add("uiskinmgr_reloaddefaults", function(ply, cmd, args, strargs)
+	if !SkinManager then return end
+
+	notification.AddLegacy("Defaults reloaded manually. It may cause some problems!", NOTIFY_GENERIC, 5)
+	reloadDefaults(SkinManager)
 end)

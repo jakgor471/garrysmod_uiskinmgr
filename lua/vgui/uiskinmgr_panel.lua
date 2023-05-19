@@ -1,148 +1,6 @@
 include("includes/uiskinmgr_include.lua")
 
-local BasePanel = baseclass.Get("DPanel")
 local PANEL = {}
-
-local availProp = vgui.RegisterTable({
-	Init = function(self)
-		self.Label = self:Add("DLabel")
-		self.Label:SetDark(true)
-		self.DivRatio = 0.6
-		self.Disabled = false
-		self.VarName = ""
-
-		self:SetPaintBackground(false)
-	end,
-	SetDisabled = function(self, bool)
-		self.Disabled = bool
-
-		self.Button:SetEnabled(!bool)
-	end,
-	OnRemoved = function(self) end,
-	OnDefault = function(self) end,
-	OnAdded = function(self) end,
-	OnEdited = function(self, anyval) end,
-	Setup = function(self, value, name, editable)
-		self.VarName = name
-		self.Label:SetText(name)
-		local skeen = self:GetSkin()
-
-		self.Button = self:Add("DImageButton")
-
-		if istable(value) && value.r && value.g && value.b then
-			self.Inner = self:Add("DButton")
-			self.Inner:SetText("")
-			self.Inner.Val = Color(value.r, value.g, value.b, value.a or 255)
-			self.Inner.Paint = function(s, w, h)
-				surface.SetDrawColor(skeen.Colours.Properties.Border)
-				surface.DrawRect(0, 0, w, h)
-				surface.SetDrawColor(s.Val.r, s.Val.g, s.Val.b, 255)
-				surface.DrawRect(2, 2, w-4, h-4)
-			end
-
-			if editable then
-				self.Inner.DoClick = function(s)
-					local color = vgui.Create( "DColorCombo", self )
-					color.Mixer:SetAlphaBar( true )
-					color:SetColor(self.Inner.Val)
-					color:SetupCloseButton( function() CloseDermaMenus() end )
-					color.OnValueChanged = function( color, newcol )
-						self:OnEdited( newcol )
-						self.Inner.Val = newcol
-					end
-
-					local menu = DermaMenu()
-					menu:AddPanel( color )
-					menu:SetPaintBackground( false )
-					menu:Open( gui.MouseX() + 8, gui.MouseY() + 10 )
-				end
-			end
-		elseif isstring(value) then
-			self.Inner = self:Add("DTextEntry")
-			self.Inner:SetValue(value)
-			self.Inner:SetPaintBackground( false )
-			self.Inner:SetEditable(editable)
-			self.Inner.OnChange = function(s)
-				self:OnEdited(s:GetValue())
-			end
-		end
-
-		if editable then
-			self.Button:SetImage("icon16/delete.png")
-			self.Button.DoClick = function(b)
-				self:OnRemoved()
-			end
-			self.Button:SetTooltip("Remove from preset")
-
-			self.DefButton = self:Add("DImageButton")
-			self.DefButton:SetImage("icon16/cog.png")
-			self.DefButton.DoClick = function(b)
-				self:OnDefault()
-			end
-			self.DefButton:SetTooltip("Revert to skin default")
-		else
-			self.Button:SetImage("icon16/add.png")
-			self.Button.DoClick = function(b)
-				self:OnAdded()
-			end
-			self.Button:SetTooltip("Add to preset")
-		end
-	end,
-	PerformLayout = function(self, w, h)
-		local divw = w * self.DivRatio
-		local divw2 = w * (1-self.DivRatio)
-
-		surface.SetFont(self.Label:GetFont())
-		local textw, texth = surface.GetTextSize(self.VarName)
-		self.Label:SetPos(8, 2)
-		self.Label:SetWide(divw - 8)
-		self.Label:SetText(self.VarName)
-		
-		if textw > self.Label:GetWide() then
-			local ratio = textw / self.Label:GetWide()
-
-			local str = string.match(self.VarName, "(%.[%w_]+)$")
-			self.Label:SetText(str or self.VarName)
-		end
-
-		if self.Inner then
-			self.Inner:SetPos(divw + 4, 2)
-			self.Inner:SetSize(divw2 * 0.6, h - 4)
-		end
-
-		local xyz = w - 18
-		if self.Button then
-			self.Button:SetPos(xyz, h - 20)
-			self.Button:SetSize(16, 16)
-
-			xyz = xyz - 20
-		end
-
-		if self.DefButton then
-			self.DefButton:SetPos(xyz, h - 20)
-			self.DefButton:SetSize(16, 16)
-		end
-	end,
-	SetDivision = function(self, ratio)
-		self.DivRatio = ratio
-	end,
-	Paint = function(self, w, h)
-		local Skin = self:GetSkin()
-		surface.SetDrawColor( color_white )
-		surface.DrawRect( 0, 0, w, h )
-		surface.SetDrawColor( Skin.Colours.Properties.Border )
-		surface.DrawRect( 0, h-1, w, 1 )
-		surface.DrawRect( w * self.DivRatio, 0, 1, h )
-
-		if self.Disabled then
-			self.Label:SetTextColor(Skin.Colours.Properties.Label_Disabled)
-
-			if self.Inner && self.Inner.SetTextColor then
-				self.Inner:SetTextColor(Skin.Colours.Properties.Label_Disabled)
-			end
-		end
-	end
-}, "DPanel")
 
 function PANEL:OnRemove()
 	if self.SkinManagerTable && self.Edited then
@@ -189,16 +47,19 @@ function PANEL:Init()
 		surface.DrawRect(0, 0, w, h)
 	end
 
-	self.AvailProps = self:Add("DScrollPanel")
-	self.AvailPropsList = self.AvailProps:Add("DListLayout")
-	self.AvailPropsList:Dock(FILL)
+	self.AvailProps = self:Add("DPropertySheet")
 
-	self.AvailProps.Paint = function(fish, w, h)
-		local skyn = fish:GetSkin()
+	self.AllProperties = {}
 
-		surface.SetDrawColor(skyn.Colours.Properties.Border)
-		surface.DrawRect(0, 0, w, h)
-	end
+	local scrollpanel1 = self.AvailProps:Add("DScrollPanel")
+	self.PropsListGeneral = scrollpanel1:Add("DListLayout")
+	self.PropsListGeneral:Dock(FILL)
+	self.AvailProps:AddSheet("General", scrollpanel1, "icon16/application_edit.png")
+
+	scrollpanel1 = self.AvailProps:Add("DScrollPanel")
+	self.PropsListExperimental = scrollpanel1:Add("DListLayout")
+	self.PropsListExperimental:Dock(FILL)
+	self.AvailProps:AddSheet("Experimental", scrollpanel1, "icon16/error.png")
 
 	self.PresetName = self:Add("DTextEntry")
 
@@ -247,6 +108,7 @@ function PANEL:Init()
 			self:UpdateList()
 			self:UpdatePresets()
 			self:UpdateAvailable()
+			self:UpdateProperties()
 		end
 	end
 end
@@ -300,26 +162,32 @@ function PANEL:UpdateAvailable()
 	if !self.SkinManagerTable.currentSkin then return end
 	if !self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin] then return end
 
-	self.AvailPropsList:Clear()
+	self.PropsListGeneral:Clear()
+	self.PropsListExperimental:Clear()
 
 	for k, v in SortedPairs(self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin]) do
-		if v.r && v.g && v.b then
-			local avail = self.AvailPropsList:Add(availProp)
-			avail:Setup({r = v.r, g = v.g, b = v.b, a = v.a}, k)
-			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
-			avail.OnAdded = function(x)
-				self.PresetData[k] = self.PresetData[k] or {r = v.r, g = v.g, b = v.b, a = v.a}
-				self:UpdateProperties()
-				self:OnEdited(true)
-			end
-		elseif isstring(v) then
-			local avail = self.AvailPropsList:Add(availProp)
-			avail:Setup(v, k)
-			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
+		local experimental = uiskinmgr.IsExperimental(k)
+		local add = experimental || istable(v) && v.r && v.g && v.b || isstring(v)
+
+		if add then
+			local avail = vgui.Create("uiskinmgr_control")
+
+			avail:Setup(v, k, false, self.SkinManagerTable.extra[k])
 			avail.OnAdded = function(x)
 				self.PresetData[k] = self.PresetData[k] or v
 				self:UpdateProperties()
 				self:OnEdited(true)
+			end
+
+			avail:SetAvailable(true)
+			avail:SetDisabled(!uiskinmgr.IsAllowedField(k))
+
+			self.AllProperties[self.SkinManagerTable.currentSkin .. k] = avail
+
+			if experimental then
+				self.PropsListExperimental:Add(avail)
+			else
+				self.PropsListGeneral:Add(avail)
 			end
 		end
 	end
@@ -328,14 +196,25 @@ end
 function PANEL:UpdateProperties()
 	self.PropertiesList:Clear()
 	for k, v in SortedPairs(self.PresetData) do
-		local prop = self.PropertiesList:Add(availProp)
+		local avail = self.AllProperties[self.SkinManagerTable.currentSkin .. k]
+
+		if IsValid(avail) then
+			avail:SetAvailable(false)
+		end
+		
+		local prop = self.PropertiesList:Add("uiskinmgr_control")
 		prop:SetDivision(0.4)
-		prop:Setup(v, k, true)
+		prop:Setup(v, k, true, self.SkinManagerTable.extra[k])
 		prop:SetDisabled(!uiskinmgr.IsAllowedField(k))
 		prop.OnRemoved = function(x)
 			self.PresetData[k] = nil
-			self:UpdateProperties()
+			//self:UpdateProperties()
 			self:OnEdited(true)
+			prop:Remove()
+			
+			if IsValid(avail) then
+				avail:SetAvailable(true)
+			end
 		end
 		prop.OnDefault = function(x)
 			self.PresetData[k] = (self.SkinManagerTable.defaults[self.SkinManagerTable.currentSkin] or {})[k]
@@ -358,6 +237,7 @@ function PANEL:UpdatePresets()
 		line.OnMousePressed = function(l, kc)
 			self:LoadPreset(self.SkinManagerTable.presets[k])
 			self:OnPresetChange(k)
+			self:UpdateAvailable()
 			self:UpdateProperties()
 			self.PresetName:SetValue(k)
 			self:OnEdited(false)
@@ -410,7 +290,7 @@ function PANEL:PerformLayout(w, h)
 	self.AvailProps:SetPos(self.Properties:GetX(), self.PresetList:GetY())
 	self.AvailProps:SetWide(self.Properties:GetWide())
 	self.AvailProps:SetTall(self.PresetList:GetTall())
-	self.AvailPropsList:InvalidateLayout()
+	self.PropsListGeneral:InvalidateLayout()
 	self.AvailProps:InvalidateLayout()
 
 	self.SaveButton:SetPos(self.AvailProps:GetX(), self.AvailProps:GetY() + self.AvailProps:GetTall() + 4)
